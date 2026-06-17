@@ -293,7 +293,98 @@ class EndEffectorKinematicController( RobotController ) :
             pass
         
         return dq_r
+
+class DampedLeastSquare_EndEffectorKinematicController( RobotController ) :
+    """ 
+    Kinematic effector coordinates controller using the Jacobian of the system
+    ------------------------------------------
+    r = r_d : reference signal vector  e   x 1
+    y = q   : sensor signal vector     dof x 1
+    u = dq  : control inputs vector    dof x 1
+    t       : time                     1   x 1
+    -------------------------------------------
+    u = c( y , r , t ) = J(q)^T *  [ (r - r_robot(q)) * k ]
+
+    """
     
+    ############################
+    def __init__(self, robot, k = 1 ):
+        """ """
+        
+        # Using functions from robot model
+        self.fwd_kin = robot.forward_kinematic_effector
+        self.J       = robot.J
+        self.e       = robot.e # nb of effector dof
+        
+        # Dimensions
+        self.dof = robot.dof
+        self.k   = self.e 
+        self.m   = self.dof
+        self.p   = self.dof
+        
+        controller.StaticController.__init__(self, self.k, self.m, self.p)
+
+        # Label
+        self.name = 'End Effector Kinematic Controller'
+        
+        # Gains
+        self.gains = np.ones( self.e  ) * k
+        
+        # Damping factor for least square solution
+        self.lambda_ = 0.1
+    
+    #############################
+    def c( self , y , r , t = 0 ):
+        """ 
+        Feedback static computation u = c(y,r,t)
+        
+        INPUTS
+        y  : sensor signal vector     p x 1
+        r  : reference signal vector  k x 1
+        t  : time                     1 x 1
+        
+        OUTPUTS
+        u  : control inputs vector    m x 1
+        
+        """
+        
+        #u = np.zeros(self.m) 
+        
+        # Feedback from sensors
+        q = y
+        
+        # Jacobian computation
+        J = self.J( q )
+        
+        # Ref
+        r_desired   = r
+        r_actual    = self.fwd_kin( q )
+        
+        # Error
+        e  = r_desired - r_actual
+        
+        # Effector space speed
+        dr_r = e * self.gains
+        
+        # From effector speed to joint speed
+        if self.dof == self.e:
+            
+            dq_r = np.dot( np.linalg.inv( J ) , dr_r )
+            
+        elif self.dof > self.e:
+            
+            # Pseudo-inverse of Jacobian
+            #J_pinv = np.linalg.pinv( J )
+            
+            ### Least square solution by RG ###
+            dq_r = (J.T @ J + self.lambda_**2 * np.eye(self.dof)) @ J.T @ dr_r
+            
+        else:
+            
+            #TODO
+            pass
+        
+        return dq_r
 ###############################################################################
 # End-Effector Kinematic with nullspace
 ###############################################################################
