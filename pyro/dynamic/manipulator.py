@@ -9,6 +9,7 @@ Created on Wed May  8 08:47:05 2019
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from pyro.analysis.graphical import figure_blocking
 ###############################################################################
 from pyro.dynamic import system
 from pyro.dynamic import mechanical
@@ -275,7 +276,7 @@ class Manipulator( mechanical.MechanicalSystem ):
         
         simfig.tight_layout()
         simfig.canvas.draw()
-        plt.show()
+        plt.show(block=figure_blocking)
                 
         return simfig
     

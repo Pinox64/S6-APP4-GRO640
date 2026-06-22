@@ -17,7 +17,7 @@ t_f = 3.0                             # duration
 
 # Compute the trajectory of the effector
 r, dr, ddr = goal2r( r_0 , r_f , t_f )
-
+print(r[:, -1])
 n = r.shape[1] # Number of time steps
 
 # Compute the trajectory of the joints
