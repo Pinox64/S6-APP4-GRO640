@@ -104,37 +104,63 @@ def f(q):
     return r
 
 
-###################
-# Part 2
-###################
-    
+########################
+# Part 2    |   By RG  #
+########################
 class CustomPositionController( EndEffectorKinematicController ) :
+    """ 
+    Kinematic effector coordinates controller using the Jacobian of the system
+    ------------------------------------------
+    r = r_d : reference signal vector  e   x 1
+    y = q   : sensor signal vector     dof x 1
+    u = dq  : control inputs vector    dof x 1
+    t       : time                     1   x 1
+    -------------------------------------------
+    u = c( y , r , t ) = J(q)^T *  [ (r - r_robot(q)) * k ]
+
+    """
     
     ############################
-    def __init__(self, manipulator ):
+    def __init__(self, manipulator, k = 1 ):
         """ """
         
+        # Using functions from robot model
+        self.fwd_kin = manipulator.forward_kinematic_effector
+        self.J       = manipulator.J
+        self.e       = manipulator.e # nb of effector dof
+        
+        # Dimensions
+        self.dof = manipulator.dof
+        self.k   = self.e 
+        self.m   = self.dof
+        self.p   = self.dof
         EndEffectorKinematicController.__init__( self, manipulator, 1)
+
+        # Label
+        self.name = 'End Effector Kinematic Controller'
         
-        ###################################################
-        # Vos paramètres de loi de commande ici !!
-        ###################################################
+        # Gains
+        self.gains = np.ones( self.e  ) * k
         
+        # Damping factor for least square solution
+        self.lambda_ = 0.1
     
     #############################
     def c( self , y , r , t = 0 ):
         """ 
-        Feedback law: u = c(y,r,t)
+        Feedback static computation u = c(y,r,t)
         
         INPUTS
-        y = q   : sensor signal vector  = joint angular positions      dof x 1
-        r = r_d : reference signal vector  = desired effector position   e x 1
-        t       : time                                                   1 x 1
+        y  : sensor signal vector     p x 1
+        r  : reference signal vector  k x 1
+        t  : time                     1 x 1
         
-        OUPUTS
-        u = dq  : control inputs vector =  joint velocities             dof x 1
+        OUTPUTS
+        u  : control inputs vector    m x 1
         
         """
+        
+        #u = np.zeros(self.m) 
         
         # Feedback from sensors
         q = y
@@ -148,17 +174,15 @@ class CustomPositionController( EndEffectorKinematicController ) :
         
         # Error
         e  = r_desired - r_actual
+        # Effector space speed
+        dr_r = e * self.gains
         
-        ################
-        dq = np.zeros( self.m )  # place-holder de bonne dimension
-        
-        ##################################
-        # Votre loi de commande ici !!!
-        ##################################
 
+        ### Least square solution by RG ###
+        dq = (J.T @ J + self.lambda_**2 * np.eye(self.dof)) @ J.T @ dr_r
+            
         
         return dq
-    
     
 ###################
 # Part 3
