@@ -44,10 +44,27 @@ def dh2T( r , d , theta, alpha ):
     
     T = np.zeros((4,4))
     
-    ###################
-    # Votre code ici
-    ###################
+    T[0, 0] = np.cos(theta)
+    T[0, 1] = -np.sin(theta) * np.cos(alpha)
+    T[0, 2] = np.sin(theta) * np.sin(alpha)
+    T[0, 3] = r * np.cos(theta)
     
+    T[1, 0] = np.sin(theta)
+    T[1, 1] = np.cos(theta) * np.cos(alpha)
+    T[1, 2] = -np.cos(theta) * np.sin(alpha)
+    T[1, 3] = r * np.sin(theta)
+    
+    T[2, 0] = 0
+    T[2, 1] = np.sin(alpha)
+    T[2, 2] = np.cos(alpha)
+    T[2, 3] = d
+    
+    T[3, 0] = 0
+    T[3, 1] = 0
+    T[3, 2] = 0
+    T[3, 3] = 1
+    
+
     return T
 
 
@@ -76,6 +93,13 @@ def dhs2T( r , d , theta, alpha ):
     ###################
     # Votre code ici
     ###################
+
+    for i in range(len(r)):
+        T = dh2T(r[i], d[i], theta[i], alpha[i])
+        if i == 0:
+            WTT = T
+        else:
+            WTT = WTT @ T
     
     return WTT
 
@@ -100,6 +124,13 @@ def f(q):
     ###################
     # Votre code ici
     ###################
+    d =     [0.147,   0,     0,     0,                 0.165,    0.009 + q[5]]
+    theta = [q[0],    q[1],  q[2],  q[3] + np.pi/2,    q[4],     -np.pi/2    ]           
+    r_dh =  [0.039,   0.155, 0.136, 0,                 0,        0.053       ]
+    alpha = [np.pi/2, 0,     0,     np.pi/2,           -np.pi/2, 0           ]
+
+    T = dhs2T( r_dh , d , theta, alpha )
+    r = T[0:3,3]
     
     return r
 
@@ -260,6 +291,40 @@ def goal2r( r_0 , r_f , t_f ):
     ##################################
     
     
+    t_array = np.linspace(0, t_f, l)
+
+    t_a = t_f / 4.0
+    v_max = 1.0 / (t_f - t_a)
+    a_c = v_max / t_a
+    
+    s = np.zeros(l)
+    s_dot = np.zeros(l)
+    s_ddot = np.zeros(l)
+    
+    for i, t in enumerate(t_array):
+        if t < t_a: #Accélération
+            s[i] = 0.5 * a_c * t**2
+            s_dot[i] = a_c * t
+            s_ddot[i] = a_c
+        elif t < (t_f - t_a): #Vitesse constante
+            s[i] = 0.5 * a_c * t_a**2 + v_max * (t - t_a)
+            s_dot[i] = v_max
+            s_ddot[i] = 0.0
+        else: #Décélération
+            t_d = t - (t_f - t_a)
+            s[i] = (0.5 * a_c * t_a**2 + v_max * (t_f - 2*t_a) 
+                    + v_max * t_d - 0.5 * a_c * t_d**2)
+            s_dot[i] = v_max - a_c * t_d
+            s_ddot[i] = -a_c
+
+    m = len(r_0)
+    
+    D = (r_f - r_0).reshape(m, 1)
+    
+    r = r_0.reshape(m, 1) + D * s
+    dr = D * s_dot
+    ddr = D * s_ddot
+    
     return r, dr, ddr
 
 
@@ -295,7 +360,37 @@ def r2q( r, dr, ddr , manipulator ):
     #################################
     # Votre code ici !!!
     ##################################
+    l1 = manipulator.l1
+    l2 = manipulator.l2
+    l3 = manipulator.l3
     
+    #Position
+    r1 = np.sqrt(r[0,:]**2 + (r[1,:])**2)
+    r2 = (r[2, :] - l1)
+    r3 = np.sqrt(r1**2 + r2**2)
+
+    phi1 = np.arccos(np.clip((l3**2 - l2**2 - r3**2) / (-2 * l2 * r3), -1.0, 1.0))
+    phi2 = np.arctan2(r2, r1)
+    phi3 = np.arccos(np.clip((r3**2 - l2**2 - l3**2) / (-2 * l2 * l3), -1.0, 1.0))
+    
+    q[0, :] = np.arctan2(r[1,:], r[0,:])
+    q[1, :] = phi1 + phi2
+    q[2, :] = phi3 - np.pi
+   
+    #Vitesse
+    for i in range(l):
+        J = manipulator.J(q[:, i])
+        dq[:, i] = np.linalg.pinv(J) @ dr[:, i]
+
+    #Accélération
+    mid = max(1, l // 2)
+    v_norm = np.linalg.norm(dr[:, mid])
+    if v_norm > 1e-8:
+        dt_estime = np.linalg.norm(r[:, mid] - r[:, mid - 1]) / v_norm
+    else:
+        dt_estime = 0.01
+
+    ddq = np.gradient(dq, dt_estime, axis=1)
     
     return q, dq, ddq
 
