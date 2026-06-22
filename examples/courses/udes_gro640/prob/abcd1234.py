@@ -172,7 +172,7 @@ class CustomPositionController( EndEffectorKinematicController ) :
         r_desired   = r
         r_actual    = self.fwd_kin( q )
         
-        # Error
+        # Error=
         e  = r_desired - r_actual
         # Effector space speed
         dr_r = e * self.gains
@@ -207,11 +207,12 @@ class CustomDrillingController( robotcontrollers.RobotController) :
         # Gains
         self.e       = robot_model.e # nb of effector dof
         self.gains = np.ones( self.e  ) * k
-        self.pos_gains = np.diag([4, 4, 2])
-        self.r_d = np.array([0.25,0.25,0.4])
+        self.pos_gains = np.diag([50, 50, 25])
+        self.r_d = np.array([0.25,0.25,0.405])
         self.Kp = np.diag([200.0, 200.0, 100.0])
         self.Kd = np.diag([30.0, 30.0, 20.0])
         self.drilling_pos_reached = False
+        self.control_mode = "IMPEDANCE"
         print('Controller initialized')
         print('Gains: ' , self.gains)
         print('Position gains: ' , self.pos_gains)
@@ -236,7 +237,7 @@ class CustomDrillingController( robotcontrollers.RobotController) :
         """
         
         # Ref
-        f_e = np.array([0,0,-100]) # Force de forage souhaitée en N
+        f_e = np.array([0,0,-200]) # Force de forage souhaitée en N
         
         # Feedback from sensors
         x = y
@@ -256,21 +257,32 @@ class CustomDrillingController( robotcontrollers.RobotController) :
         e = self.r_d - r
         e_max = 0.01
         #Loi de commande:
-        #force cartésienne de contrôle de la position
+        #Approche du robot vers la position de forage
         if not self.drilling_pos_reached:
             if (all(np.abs(x) < e_max for x in e)):
                 self.drilling_pos_reached = True
                 print('Drilling position reached, switching to force control')
                 #print('Force control')
 
-            # From effector target to joint torque
-            cartesian_force = self.Kp @ e - self.Kd @ (J @ dq)
-            u = J.T @ cartesian_force + g
-            #print('Position control')
+            if(self.control_mode == "POSITION"):
+                # From effector target to joint torque
+                cartesian_force = self.pos_gains @ e
+                u = J.T @ cartesian_force + g
+                #print('Position control')
+            else:
+                #impedance control
+                cartesian_force = self.pos_gains @ e - self.Kd @ (J @ dq)
+                u = J.T @ cartesian_force + g
+                #print('Force control')
+        # Forage
         else:
             # Force control
             if (r[2] > 0.21):
-                u = J.T @ (np.eye(3) @ f_e + g)
+                #Forage en controle de force
+                #u = J.T @ (np.eye(3) @ f_e + g)
+
+                #Forage hybride impédance-force
+                u= J.T @ (self.Kp @ e + self.Kd @ (-J @ dq) + f_e) + g
             else:
                 u = g
                 print('Drilling complete, stopping robot')
