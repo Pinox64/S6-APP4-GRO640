@@ -189,14 +189,13 @@ class CustomPositionController( EndEffectorKinematicController ) :
 ###################
         
 
-        
-class CustomDrillingController( robotcontrollers.RobotController ) :
+class CustomDrillingController( robotcontrollers.RobotController) :
     """ 
 
     """
     
     ############################
-    def __init__(self, robot_model ):
+    def __init__(self, robot_model, k = 1 ):
         """ """
         
         super().__init__( dof = 3 )
@@ -205,6 +204,20 @@ class CustomDrillingController( robotcontrollers.RobotController ) :
         
         # Label
         self.name = 'Custom Drilling Controller'
+        # Gains
+        self.e       = robot_model.e # nb of effector dof
+        self.gains = np.ones( self.e  ) * k
+        self.pos_gains = np.diag([4, 4, 2])
+        self.r_d = np.array([0.25,0.25,0.4])
+        self.Kp = np.diag([200.0, 200.0, 100.0])
+        self.Kd = np.diag([30.0, 30.0, 20.0])
+        self.drilling_pos_reached = False
+        print('Controller initialized')
+        print('Gains: ' , self.gains)
+        print('Position gains: ' , self.pos_gains)
+        print('Desired position: ' , self.r_d)
+        
+
         
         
     #############################
@@ -223,7 +236,7 @@ class CustomDrillingController( robotcontrollers.RobotController ) :
         """
         
         # Ref
-        f_e = r
+        f_e = np.array([0,0,-100]) # Force de forage souhaitée en N
         
         # Feedback from sensors
         x = y
@@ -236,11 +249,33 @@ class CustomDrillingController( robotcontrollers.RobotController ) :
         H = self.robot_model.H( q )      # Inertia matrix
         C = self.robot_model.C( q , dq ) # Coriolis matrix
             
-        ##################################
-        # Votre loi de commande ici !!!
-        ##################################
-        
-        u = np.zeros(self.m)  # place-holder de bonne dimension
+        # Jacobian computation
+        J = self.robot_model.J( q )
+
+        # Effector space position error
+        e = self.r_d - r
+        e_max = 0.01
+        #Loi de commande:
+        #force cartésienne de contrôle de la position
+        if not self.drilling_pos_reached:
+            if (all(np.abs(x) < e_max for x in e)):
+                self.drilling_pos_reached = True
+                print('Drilling position reached, switching to force control')
+                #print('Force control')
+
+            # From effector target to joint torque
+            cartesian_force = self.Kp @ e - self.Kd @ (J @ dq)
+            u = J.T @ cartesian_force + g
+            #print('Position control')
+        else:
+            # Force control
+            if (r[2] > 0.21):
+                u = J.T @ (np.eye(3) @ f_e + g)
+            else:
+                u = g
+                print('Drilling complete, stopping robot')
+                self.drilling_pos_reached = False
+
         
         return u
         

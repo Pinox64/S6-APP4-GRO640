@@ -18,7 +18,7 @@ sys = DrillingRobotOnJig()
 
 # Controller
 model = DrillingRobot()
-ctl   = CustomDrillingController( model ) # Empty do nothing controller template
+ctl   = CustomDrillingController( model )
 
 # Closed-loop dynamic
 clsys = ctl + sys
