@@ -239,7 +239,7 @@ class CustomDrillingController( robotcontrollers.RobotController) :
         self.e       = robot_model.e # nb of effector dof
         self.gains = np.ones( self.e  ) * k
         self.pos_gains = np.diag([50, 50, 25])
-        self.r_d = np.array([0.25,0.25,0.405])
+        self.r_d = np.array([0.25,0.25,0.4])
         self.Kp = np.diag([200.0, 200.0, 100.0])
         self.Kd = np.diag([30.0, 30.0, 20.0])
         self.drilling_pos_reached = False
@@ -286,7 +286,7 @@ class CustomDrillingController( robotcontrollers.RobotController) :
 
         # Effector space position error
         e = self.r_d - r
-        e_max = 0.01
+        e_max = 0.001
         #Loi de commande:
         #Approche du robot vers la position de forage
         if not self.drilling_pos_reached:
